@@ -1,1 +1,7 @@
 project_id = "tfyihewppxcoitjmcjvv"
+
+[functions.daily-backup]
+verify_jwt = false
+
+[functions.analyze-menu-photo]
+verify_jwt = false
