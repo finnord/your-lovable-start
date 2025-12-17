@@ -1,0 +1,333 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@layer base {
+  :root {
+    /* Swiss Typography Scale */
+    --font-swiss: 'Inter', 'Helvetica Neue', -apple-system, sans-serif;
+    
+    /* Tracking */
+    --tracking-tighter: -0.04em;
+    --tracking-tight: -0.02em;
+    --tracking-normal: 0;
+    --tracking-wide: 0.05em;
+    --tracking-wider: 0.1em;
+    --tracking-widest: 0.15em;
+
+    /* Swiss Typography Sizes */
+    --text-micro: 0.6875rem;   /* 11px */
+    --text-xs: 0.75rem;        /* 12px */
+    --text-sm: 0.875rem;       /* 14px */
+    --text-base: 1rem;         /* 16px */
+    --text-lg: 1.125rem;       /* 18px */
+    --text-xl: 1.25rem;        /* 20px */
+    --text-2xl: 1.5rem;        /* 24px */
+    --text-3xl: 2rem;          /* 32px */
+    --text-4xl: 2.5rem;        /* 40px */
+    --text-5xl: 3rem;          /* 48px */
+    --text-display: 4rem;      /* 64px */
+    --text-hero: 5rem;         /* 80px */
+
+    /* Generous Swiss Spacing */
+    --space-1: 0.25rem;   /* 4px */
+    --space-2: 0.5rem;    /* 8px */
+    --space-3: 0.75rem;   /* 12px */
+    --space-4: 1rem;      /* 16px */
+    --space-5: 1.5rem;    /* 24px */
+    --space-6: 2rem;      /* 32px */
+    --space-8: 3rem;      /* 48px */
+    --space-10: 4rem;     /* 64px */
+    --space-12: 5rem;     /* 80px */
+    --space-16: 8rem;     /* 128px */
+
+    /* Swiss Color System - Clean Contrast (inspired by s-i-l-o.fr) */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 4%;
+
+    --card: 0 0% 98%;
+    --card-foreground: 0 0% 4%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 4%;
+
+    /* Primary: Sea Blue from Mare Mio */
+    --primary: 200 60% 40%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 40%;
+
+    --accent: 200 60% 95%;
+    --accent-foreground: 200 60% 30%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 88%;
+    --input: 0 0% 88%;
+    --ring: 200 60% 40%;
+
+    /* Minimal radius */
+    --radius: 0.25rem;
+    --radius-sm: 0.125rem;
+    --radius-md: 0.25rem;
+    --radius-lg: 0.375rem;
+
+    /* Status colors */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 0 0% 4%;
+    --info: 200 100% 50%;
+    --info-foreground: 0 0% 100%;
+
+    /* Sidebar - Dark contrast */
+    --sidebar-background: 200 50% 12%;
+    --sidebar-foreground: 0 0% 98%;
+    --sidebar-primary: 200 60% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 200 40% 20%;
+    --sidebar-accent-foreground: 0 0% 98%;
+    --sidebar-border: 200 30% 20%;
+    --sidebar-ring: 200 60% 55%;
+  }
+
+  .dark {
+    /* Dark mode - high contrast */
+    --background: 0 0% 4%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 7%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 200 60% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 12%;
+    --secondary-foreground: 0 0% 98%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 55%;
+
+    --accent: 200 40% 20%;
+    --accent-foreground: 200 60% 80%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 200 60% 55%;
+
+    --sidebar-background: 200 50% 8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: var(--font-swiss);
+    font-feature-settings: "kern" 1, "liga" 1, "ss01" 1;
+    letter-spacing: var(--tracking-tight);
+  }
+
+  /* Swiss Typography */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-swiss);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tighter);
+    line-height: 1;
+  }
+
+  p {
+    line-height: 1.6;
+  }
+}
+
+@layer components {
+  /* Swiss Label - Small uppercase */
+  .swiss-label {
+    font-size: var(--text-micro);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-widest);
+    color: hsl(var(--muted-foreground));
+  }
+
+  /* Swiss Display - Massive titles */
+  .swiss-display {
+    font-size: var(--text-display);
+    font-weight: 800;
+    letter-spacing: var(--tracking-tighter);
+    line-height: 0.9;
+  }
+
+  /* Swiss Title */
+  .swiss-title {
+    font-size: var(--text-4xl);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tighter);
+    line-height: 1;
+  }
+
+  /* Swiss Heading */
+  .swiss-heading {
+    font-size: var(--text-2xl);
+    font-weight: 600;
+    letter-spacing: var(--tracking-tight);
+    line-height: 1.1;
+  }
+
+  /* Swiss Body */
+  .swiss-body {
+    font-size: var(--text-base);
+    font-weight: 400;
+    line-height: 1.6;
+  }
+
+  /* Swiss Small */
+  .swiss-small {
+    font-size: var(--text-sm);
+    font-weight: 400;
+    line-height: 1.5;
+  }
+
+  /* Swiss Card - Thin border, generous padding */
+  .swiss-card {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: var(--space-6);
+  }
+
+  /* Swiss Button */
+  .swiss-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-wide);
+    padding: var(--space-4) var(--space-6);
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border: none;
+    border-radius: var(--radius);
+    transition: opacity 0.15s ease;
+  }
+
+  .swiss-button:hover {
+    opacity: 0.9;
+  }
+
+  /* Swiss Divider */
+  .swiss-divider {
+    height: 1px;
+    background: hsl(var(--border));
+    margin: var(--space-5) 0;
+  }
+
+  /* Swiss Section Spacing */
+  .swiss-section {
+    padding: var(--space-8) 0;
+  }
+
+  /* Swiss Grid */
+  .swiss-grid {
+    display: grid;
+    gap: var(--space-6);
+  }
+}
+
+@layer utilities {
+  /* Tracking utilities */
+  .tracking-swiss-tight {
+    letter-spacing: var(--tracking-tighter);
+  }
+
+  .tracking-swiss-wide {
+    letter-spacing: var(--tracking-widest);
+  }
+
+  /* Swiss uppercase label style */
+  .uppercase-label {
+    @apply text-xs font-medium uppercase tracking-widest text-muted-foreground;
+  }
+
+  /* Generous spacing helpers */
+  .p-swiss {
+    padding: var(--space-6);
+  }
+
+  .py-swiss {
+    padding-top: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+
+  .px-swiss {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  .gap-swiss {
+    gap: var(--space-6);
+  }
+
+  .space-y-swiss > * + * {
+    margin-top: var(--space-6);
+  }
+
+  /* Minimal shadows */
+  .shadow-swiss {
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.08);
+  }
+
+  /* Number display - huge */
+  .number-display {
+    font-size: var(--text-hero);
+    font-weight: 800;
+    letter-spacing: var(--tracking-tighter);
+    line-height: 0.85;
+  }
+
+  /* Safe overflow */
+  .overflow-safe {
+    @apply overflow-hidden max-w-full;
+  }
+
+  .line-clamp-1 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+/* Minimal scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border));
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground));
+}
