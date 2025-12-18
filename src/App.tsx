@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { ReactLenis } from 'lenis/react';
 import Dashboard from "./pages/Dashboard";
 import NuovoOrdine from "./pages/NuovoOrdine";
 import ModificaOrdine from "./pages/ModificaOrdine";
@@ -63,18 +64,29 @@ const AppLayout = () => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          {/* Public pages - isolated from main app */}
-          <Route path="/prenota" element={<PublicBooking />} />
-          <Route path="/ordina" element={<PublicOrder />} />
-          
-          {/* Main app with sidebar layout */}
-          <Route path="/*" element={<AppLayout />} />
-        </Routes>
-      </BrowserRouter>
+      <ReactLenis 
+        root 
+        options={{ 
+          lerp: 0.1,
+          duration: 1.2,
+          smoothWheel: true,
+          wheelMultiplier: 1,
+          touchMultiplier: 2,
+        }}
+      >
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            {/* Public pages - isolated from main app */}
+            <Route path="/prenota" element={<PublicBooking />} />
+            <Route path="/ordina" element={<PublicOrder />} />
+            
+            {/* Main app with sidebar layout */}
+            <Route path="/*" element={<AppLayout />} />
+          </Routes>
+        </BrowserRouter>
+      </ReactLenis>
     </TooltipProvider>
   </QueryClientProvider>
 );
