@@ -1,11 +1,14 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { DndContext, DragOverlay, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Save, Plus, Trash2, Grid3X3, Lock, LockOpen } from 'lucide-react';
+import { Save, Plus, Trash2, Grid3X3, Lock, LockOpen, Circle, Square, RectangleVertical, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { PageWrapper } from '@/components/ui/PageWrapper';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -13,6 +16,18 @@ import { cn } from '@/lib/utils';
 // Grid configuration
 const GRID_SIZE = 40;
 const TABLE_SIZE = 80;
+const BISTRO_WIDTH = 60;
+const BISTRO_HEIGHT = 100;
+
+// Room configuration
+const ROOMS = [
+  { id: 'grande', label: 'Sala Grande', color: 'bg-amber-500/20' },
+  { id: 'blu', label: 'Sala Blu', color: 'bg-blue-500/20' },
+  { id: 'rosa', label: 'Sala Rosa', color: 'bg-pink-500/20' },
+] as const;
+
+type RoomId = typeof ROOMS[number]['id'];
+type TableShape = 'square' | 'round' | 'bistro';
 
 // Snap to grid function
 const snapToGrid = (value: number): number => {
@@ -32,6 +47,13 @@ interface Table {
   position_x: number | null;
   position_y: number | null;
   is_active: boolean;
+  shape: TableShape;
+  min_capacity: number | null;
+  max_capacity: number | null;
+  module_group: string | null;
+  module_position: number | null;
+  is_combinable: boolean;
+  room: RoomId;
 }
 
 interface CanvasTable extends Table {
@@ -40,39 +62,59 @@ interface CanvasTable extends Table {
 
 // Template types for inventory
 const TABLE_TEMPLATES = [
-  { capacity: 2, label: '2 posti', color: 'bg-blue-500/20 border-blue-500/40' },
-  { capacity: 4, label: '4 posti', color: 'bg-green-500/20 border-green-500/40' },
-  { capacity: 6, label: '6 posti', color: 'bg-yellow-500/20 border-yellow-500/40' },
-  { capacity: 8, label: '8 posti', color: 'bg-orange-500/20 border-orange-500/40' },
+  { capacity: 2, shape: 'round' as TableShape, label: '2p Rotondo', icon: Circle },
+  { capacity: 4, shape: 'square' as TableShape, label: '4p Quadrato', icon: Square },
+  { capacity: 6, shape: 'square' as TableShape, label: '6p Quadrato', icon: Square },
+  { capacity: 2, shape: 'bistro' as TableShape, label: 'Bistrot', icon: RectangleVertical },
 ];
+
+// Get table dimensions based on shape
+const getTableDimensions = (shape: TableShape) => {
+  switch (shape) {
+    case 'bistro':
+      return { width: BISTRO_WIDTH, height: BISTRO_HEIGHT };
+    case 'round':
+    case 'square':
+    default:
+      return { width: TABLE_SIZE, height: TABLE_SIZE };
+  }
+};
+
+// Get capacity color
+const getCapacityColor = (capacity: number, shape: TableShape) => {
+  if (shape === 'bistro') return 'bg-purple-500/20 border-purple-500/40 hover:bg-purple-500/30';
+  if (capacity <= 2) return 'bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30';
+  if (capacity <= 4) return 'bg-green-500/20 border-green-500/40 hover:bg-green-500/30';
+  if (capacity <= 6) return 'bg-yellow-500/20 border-yellow-500/40 hover:bg-yellow-500/30';
+  return 'bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30';
+};
 
 // Draggable inventory item
 function InventoryItem({ template, disabled }: { template: typeof TABLE_TEMPLATES[0]; disabled?: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `template-${template.capacity}`,
-    data: { type: 'template', capacity: template.capacity },
+    id: `template-${template.shape}-${template.capacity}`,
+    data: { type: 'template', capacity: template.capacity, shape: template.shape },
     disabled,
   });
+
+  const Icon = template.icon;
+  const color = getCapacityColor(template.capacity, template.shape);
 
   return (
     <div
       ref={setNodeRef}
       {...(disabled ? {} : { ...listeners, ...attributes })}
       className={cn(
-        "p-4 border rounded-lg transition-all duration-200",
+        "p-3 border rounded-lg transition-all duration-200 flex flex-col items-center gap-1",
         disabled 
           ? "opacity-50 cursor-not-allowed" 
           : "cursor-grab active:cursor-grabbing hover:scale-105 hover:shadow-lg",
-        template.color,
+        color,
         isDragging && "opacity-50 scale-95"
       )}
     >
-      <div className="text-center">
-        <div className="text-2xl font-bold">{template.capacity}</div>
-        <div className="text-xs uppercase tracking-widest text-muted-foreground mt-1">
-          {template.label}
-        </div>
-      </div>
+      <Icon className="w-5 h-5" />
+      <div className="text-xs font-medium text-center">{template.label}</div>
     </div>
   );
 }
@@ -82,12 +124,14 @@ function CanvasTableItem({
   table, 
   isSelected, 
   onClick,
-  disabled
+  disabled,
+  linkedTables
 }: { 
   table: CanvasTable; 
   isSelected: boolean;
   onClick: () => void;
   disabled?: boolean;
+  linkedTables?: CanvasTable[];
 }) {
   const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
     id: table.id,
@@ -95,61 +139,71 @@ function CanvasTableItem({
     disabled,
   });
 
-  const capacityColor = 
-    table.capacity <= 2 ? 'bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30' :
-    table.capacity <= 4 ? 'bg-green-500/20 border-green-500/40 hover:bg-green-500/30' :
-    table.capacity <= 6 ? 'bg-yellow-500/20 border-yellow-500/40 hover:bg-yellow-500/30' :
-    'bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30';
+  const dimensions = getTableDimensions(table.shape);
+  const capacityColor = getCapacityColor(table.capacity, table.shape);
+
+  // Display capacity range if combinable
+  const capacityLabel = table.is_combinable && table.min_capacity && table.max_capacity
+    ? `${table.min_capacity}-${table.max_capacity}p`
+    : `${table.capacity}p`;
 
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        position: 'absolute',
-        left: table.position_x || 0,
-        top: table.position_y || 0,
-        width: TABLE_SIZE,
-        height: TABLE_SIZE,
-        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
-        willChange: isDragging ? 'transform' : undefined,
-      }}
-      {...(disabled ? {} : { ...listeners, ...attributes })}
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick();
-      }}
-      className={cn(
-        "rounded-lg border-2 flex flex-col items-center justify-center",
-        disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
-        !isDragging && "transition-colors transition-shadow duration-200",
-        capacityColor,
-        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
-        isDragging && "opacity-70 z-50 shadow-2xl scale-105"
-      )}
-    >
-      <div className="text-sm font-bold">{table.name}</div>
-      <div className="text-xs text-muted-foreground">{table.capacity}p</div>
-    </div>
+    <>
+      <div
+        ref={setNodeRef}
+        style={{
+          position: 'absolute',
+          left: table.position_x || 0,
+          top: table.position_y || 0,
+          width: dimensions.width,
+          height: dimensions.height,
+          transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+          willChange: isDragging ? 'transform' : undefined,
+        }}
+        {...(disabled ? {} : { ...listeners, ...attributes })}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClick();
+        }}
+        className={cn(
+          "border-2 flex flex-col items-center justify-center",
+          disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
+          !isDragging && "transition-colors transition-shadow duration-200",
+          table.shape === 'round' ? "rounded-full" : "rounded-lg",
+          capacityColor,
+          isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
+          isDragging && "opacity-70 z-50 shadow-2xl scale-105",
+          table.is_combinable && "border-dashed"
+        )}
+      >
+        <div className="text-sm font-bold">{table.name}</div>
+        <div className="text-xs text-muted-foreground">{capacityLabel}</div>
+        {table.is_combinable && (
+          <Link2 className="w-3 h-3 text-muted-foreground mt-0.5" />
+        )}
+      </div>
+    </>
   );
 }
 
-// Canvas drop area with ref for position calculations
+// Canvas drop area
 function Canvas({ 
   children, 
   onClick,
   canvasRef,
-  showGrid
+  showGrid,
+  roomColor
 }: { 
   children: React.ReactNode;
   onClick: () => void;
   canvasRef: React.RefObject<HTMLDivElement>;
   showGrid: boolean;
+  roomColor: string;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas',
   });
 
-  // Combine refs
   const combinedRef = useCallback((node: HTMLDivElement | null) => {
     setNodeRef(node);
     if (canvasRef && 'current' in canvasRef) {
@@ -163,7 +217,8 @@ function Canvas({
       onClick={onClick}
       className={cn(
         "relative w-full h-[600px] border border-dashed rounded-lg transition-all duration-300 overflow-hidden",
-        isOver ? "border-primary bg-primary/5 shadow-inner" : "border-border/50 bg-muted/20"
+        isOver ? "border-primary bg-primary/5 shadow-inner" : "border-border/50",
+        roomColor
       )}
     >
       {/* Grid pattern */}
@@ -180,7 +235,6 @@ function Canvas({
           backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
         }}
       />
-      {/* Dots at intersections */}
       <div 
         className="absolute inset-0 opacity-30"
         style={{
@@ -201,14 +255,14 @@ export default function TavoliMappa() {
   const [saving, setSaving] = useState(false);
   const [nextTableNumber, setNextTableNumber] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
-  const [isLocked, setIsLocked] = useState(true); // Default: locked for safety
+  const [isLocked, setIsLocked] = useState(true);
+  const [activeRoom, setActiveRoom] = useState<RoomId>('grande');
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  // Configure sensors with activation constraint to prevent accidental drags
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8, // Minimum drag distance before activation
+        distance: 8,
       },
     })
   );
@@ -225,15 +279,15 @@ export default function TavoliMappa() {
         console.error('[TavoliMappa] Error fetching tables:', error);
         toast.error('Errore nel caricamento dei tavoli');
       } else if (data) {
-        // Snap existing tables to grid
         const snappedTables = data.map(t => ({
           ...t,
-          position_x: t.position_x !== null ? snapToGrid(t.position_x) : GRID_SIZE,
-          position_y: t.position_y !== null ? snapToGrid(t.position_y) : GRID_SIZE,
+          position_x: t.position_x !== null ? snapToGrid(Number(t.position_x)) : GRID_SIZE,
+          position_y: t.position_y !== null ? snapToGrid(Number(t.position_y)) : GRID_SIZE,
+          shape: (t.shape || 'square') as TableShape,
+          room: (t.room || 'grande') as RoomId,
         }));
         setTables(snappedTables);
         
-        // Calculate next table number
         const maxNum = data.reduce((max, t) => {
           const num = parseInt(t.name.replace(/\D/g, '')) || 0;
           return Math.max(max, num);
@@ -244,6 +298,9 @@ export default function TavoliMappa() {
     }
     fetchTables();
   }, []);
+
+  // Filter tables by current room
+  const roomTables = tables.filter(t => t.room === activeRoom);
 
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
@@ -257,19 +314,18 @@ export default function TavoliMappa() {
 
     const activeData = active.data.current;
     const canvasRect = canvasRef.current.getBoundingClientRect();
-    const maxX = canvasRect.width - TABLE_SIZE;
-    const maxY = canvasRect.height - TABLE_SIZE;
 
     // If dragging a template onto canvas, create new table
     if (activeData?.type === 'template' && over.id === 'canvas') {
-      const capacity = activeData.capacity;
+      const { capacity, shape } = activeData;
+      const dimensions = getTableDimensions(shape);
+      const maxX = canvasRect.width - dimensions.width;
+      const maxY = canvasRect.height - dimensions.height;
       
-      // Get the pointer position from the event
       const pointerEvent = event.activatorEvent as PointerEvent;
-      const dropX = pointerEvent.clientX - canvasRect.left - TABLE_SIZE / 2;
-      const dropY = pointerEvent.clientY - canvasRect.top - TABLE_SIZE / 2;
+      const dropX = pointerEvent.clientX - canvasRect.left - dimensions.width / 2;
+      const dropY = pointerEvent.clientY - canvasRect.top - dimensions.height / 2;
       
-      // Snap to grid and clamp within bounds
       const snappedX = clamp(snapToGrid(dropX), 0, maxX);
       const snappedY = clamp(snapToGrid(dropY), 0, maxY);
       
@@ -282,6 +338,13 @@ export default function TavoliMappa() {
         position_y: snappedY,
         is_active: true,
         isNew: true,
+        shape,
+        min_capacity: null,
+        max_capacity: null,
+        module_group: null,
+        module_position: null,
+        is_combinable: false,
+        room: activeRoom,
       };
       setTables(prev => [...prev, newTable]);
       setNextTableNumber(prev => prev + 1);
@@ -289,15 +352,18 @@ export default function TavoliMappa() {
       toast.success(`Tavolo ${newTable.name} aggiunto`);
     }
 
-    // If dragging existing table on canvas, update position with snap
+    // If dragging existing table on canvas, update position
     if (activeData?.type === 'table') {
       const tableId = active.id as string;
       setTables(prev => prev.map(t => {
         if (t.id === tableId) {
+          const dimensions = getTableDimensions(t.shape);
+          const maxX = canvasRect.width - dimensions.width;
+          const maxY = canvasRect.height - dimensions.height;
+          
           const newX = (t.position_x || 0) + delta.x;
           const newY = (t.position_y || 0) + delta.y;
           
-          // Snap to grid and clamp within bounds
           const snappedX = clamp(snapToGrid(newX), 0, maxX);
           const snappedY = clamp(snapToGrid(newY), 0, maxY);
           
@@ -316,11 +382,9 @@ export default function TavoliMappa() {
     setSaving(true);
 
     try {
-      // Separate new tables and existing tables
       const newTables = tables.filter(t => t.isNew);
       const existingTables = tables.filter(t => !t.isNew);
 
-      // Insert new tables
       for (const table of newTables) {
         const { data, error } = await supabase
           .from('tables')
@@ -331,25 +395,39 @@ export default function TavoliMappa() {
             position_x: table.position_x,
             position_y: table.position_y,
             is_active: table.is_active,
+            shape: table.shape,
+            min_capacity: table.min_capacity,
+            max_capacity: table.max_capacity,
+            module_group: table.module_group,
+            module_position: table.module_position,
+            is_combinable: table.is_combinable,
+            room: table.room,
           })
           .select()
           .single();
 
         if (error) throw error;
 
-        // Update local state with real ID
         setTables(prev => prev.map(t => 
-          t.id === table.id ? { ...data, isNew: false } : t
+          t.id === table.id ? { ...data, shape: data.shape as TableShape, room: data.room as RoomId, isNew: false } : t
         ));
       }
 
-      // Update existing tables positions
       for (const table of existingTables) {
         const { error } = await supabase
           .from('tables')
           .update({
+            name: table.name,
+            capacity: table.capacity,
             position_x: table.position_x,
             position_y: table.position_y,
+            shape: table.shape,
+            min_capacity: table.min_capacity,
+            max_capacity: table.max_capacity,
+            module_group: table.module_group,
+            module_position: table.module_position,
+            is_combinable: table.is_combinable,
+            room: table.room,
           })
           .eq('id', table.id);
 
@@ -372,10 +450,8 @@ export default function TavoliMappa() {
     if (!table) return;
 
     if (table.isNew) {
-      // Just remove from local state
       setTables(prev => prev.filter(t => t.id !== selectedTable));
     } else {
-      // Delete from database
       const { error } = await supabase
         .from('tables')
         .delete()
@@ -402,6 +478,7 @@ export default function TavoliMappa() {
   };
 
   const selectedTableData = tables.find(t => t.id === selectedTable);
+  const currentRoomConfig = ROOMS.find(r => r.id === activeRoom);
 
   if (loading) {
     return (
@@ -414,7 +491,6 @@ export default function TavoliMappa() {
   const toggleLock = () => {
     setIsLocked(prev => !prev);
     if (!isLocked) {
-      // When locking, deselect any selected table
       setSelectedTable(null);
     }
     toast(isLocked ? 'Modifica abilitata' : 'Mappa bloccata', {
@@ -425,13 +501,13 @@ export default function TavoliMappa() {
   return (
     <PageWrapper>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 animate-fade-in">
+      <div className="flex items-center justify-between mb-6 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Mappa Tavoli</h1>
           <p className="text-muted-foreground mt-1">
             {isLocked 
               ? 'Mappa bloccata • Sblocca per modificare'
-              : `Trascina i tavoli per posizionarli • Griglia ${GRID_SIZE}px`
+              : `${roomTables.length} tavoli in ${currentRoomConfig?.label}`
             }
           </p>
         </div>
@@ -452,23 +528,35 @@ export default function TavoliMappa() {
         </div>
       </div>
 
+      {/* Room Tabs */}
+      <Tabs value={activeRoom} onValueChange={(v) => setActiveRoom(v as RoomId)} className="mb-6">
+        <TabsList className="grid w-full max-w-md grid-cols-3">
+          {ROOMS.map(room => (
+            <TabsTrigger key={room.id} value={room.id} className="gap-2">
+              <div className={cn("w-3 h-3 rounded-full", room.color.replace('/20', ''))} />
+              {room.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       <DndContext 
         sensors={sensors}
         onDragStart={handleDragStart} 
         onDragEnd={handleDragEnd}
       >
-        <div className="grid grid-cols-[240px_1fr_240px] gap-6">
+        <div className="grid grid-cols-[200px_1fr_240px] gap-6">
           {/* Inventory Panel */}
           <Card className={cn(
             "p-4 h-fit animate-fade-in transition-opacity duration-300",
             isLocked && "opacity-50"
-          )} style={{ animationDelay: '0.1s' }}>
+          )}>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
               Inventario
             </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {TABLE_TEMPLATES.map(template => (
-                <InventoryItem key={template.capacity} template={template} disabled={isLocked} />
+            <div className="grid grid-cols-2 gap-2">
+              {TABLE_TEMPLATES.map((template, i) => (
+                <InventoryItem key={`${template.shape}-${template.capacity}-${i}`} template={template} disabled={isLocked} />
               ))}
             </div>
             <p className="text-xs text-muted-foreground mt-4 text-center">
@@ -477,13 +565,14 @@ export default function TavoliMappa() {
           </Card>
 
           {/* Canvas */}
-          <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+          <div className="animate-fade-in">
             <Canvas 
               onClick={() => setSelectedTable(null)}
               canvasRef={canvasRef}
               showGrid={showGrid}
+              roomColor={currentRoomConfig?.color || ''}
             >
-              {tables.map(table => (
+              {roomTables.map(table => (
                 <CanvasTableItem
                   key={table.id}
                   table={table}
@@ -499,7 +588,7 @@ export default function TavoliMappa() {
           <Card className={cn(
             "p-4 h-fit animate-fade-in transition-opacity duration-300",
             isLocked && "opacity-50"
-          )} style={{ animationDelay: '0.3s' }}>
+          )}>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
               Proprietà
             </h3>
@@ -519,6 +608,25 @@ export default function TavoliMappa() {
 
                 <div className="space-y-2">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                    Forma
+                  </Label>
+                  <Select
+                    value={selectedTableData.shape}
+                    onValueChange={(v) => handleUpdateSelected({ shape: v as TableShape })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="square">Quadrato</SelectItem>
+                      <SelectItem value="round">Rotondo</SelectItem>
+                      <SelectItem value="bistro">Bistrot</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">
                     Capienza
                   </Label>
                   <Input
@@ -531,16 +639,71 @@ export default function TavoliMappa() {
                   />
                 </div>
 
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                    Combinabile
+                  </Label>
+                  <Switch
+                    checked={selectedTableData.is_combinable}
+                    onCheckedChange={(checked) => handleUpdateSelected({ is_combinable: checked })}
+                  />
+                </div>
+
+                {selectedTableData.is_combinable && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Min</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={selectedTableData.min_capacity || ''}
+                          onChange={(e) => handleUpdateSelected({ min_capacity: parseInt(e.target.value) || null })}
+                          className="h-9"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Max</Label>
+                        <Input
+                          type="number"
+                          min={1}
+                          value={selectedTableData.max_capacity || ''}
+                          onChange={(e) => handleUpdateSelected({ max_capacity: parseInt(e.target.value) || null })}
+                          className="h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                        Gruppo modulo
+                      </Label>
+                      <Input
+                        value={selectedTableData.module_group || ''}
+                        onChange={(e) => handleUpdateSelected({ module_group: e.target.value || null })}
+                        placeholder="es. A, B, 34-35"
+                        className="h-10"
+                      />
+                    </div>
+                  </>
+                )}
+
                 <div className="space-y-2">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                    Zona
+                    Sala
                   </Label>
-                  <Input
-                    value={selectedTableData.location || ''}
-                    onChange={(e) => handleUpdateSelected({ location: e.target.value || null })}
-                    placeholder="es. Terrazza"
-                    className="h-10"
-                  />
+                  <Select
+                    value={selectedTableData.room}
+                    onValueChange={(v) => handleUpdateSelected({ room: v as RoomId })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROOMS.map(room => (
+                        <SelectItem key={room.id} value={room.id}>{room.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -588,7 +751,7 @@ export default function TavoliMappa() {
         </DragOverlay>
       </DndContext>
 
-      {/* Lock/Unlock FAB - Max MSP style */}
+      {/* Lock/Unlock FAB */}
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
         <Button
           variant={isLocked ? "default" : "outline"}
