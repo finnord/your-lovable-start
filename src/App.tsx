@@ -16,6 +16,7 @@ import Prenotazioni from "./pages/Prenotazioni";
 import Tavoli from "./pages/Tavoli";
 import TavoliMappa from "./pages/TavoliMappa";
 import PublicBooking from "./pages/PublicBooking";
+import PublicOrder from "./pages/PublicOrder";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,8 +67,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          {/* Public booking page - isolated from main app */}
+          {/* Public pages - isolated from main app */}
           <Route path="/prenota" element={<PublicBooking />} />
+          <Route path="/ordina" element={<PublicOrder />} />
           
           {/* Main app with sidebar layout */}
           <Route path="/*" element={<AppLayout />} />
