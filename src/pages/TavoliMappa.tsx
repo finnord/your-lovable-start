@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { DndContext, DragOverlay, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Save, Plus, Trash2, Grid3X3, Lock, LockOpen, Circle, Square, RectangleVertical, Link2 } from 'lucide-react';
+import { Save, Plus, Trash2, Grid3X3, Lock, LockOpen, Circle, Square, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,8 +16,6 @@ import { cn } from '@/lib/utils';
 // Grid configuration
 const GRID_SIZE = 40;
 const TABLE_SIZE = 80;
-const BISTRO_WIDTH = 60;
-const BISTRO_HEIGHT = 100;
 
 // Room configuration
 const ROOMS = [
@@ -27,7 +25,7 @@ const ROOMS = [
 ] as const;
 
 type RoomId = typeof ROOMS[number]['id'];
-type TableShape = 'square' | 'round' | 'bistro';
+type TableShape = 'square' | 'round';
 
 // Snap to grid function
 const snapToGrid = (value: number): number => {
@@ -54,35 +52,27 @@ interface Table {
   module_position: number | null;
   is_combinable: boolean;
   room: RoomId;
+  is_separator: boolean;
 }
 
 interface CanvasTable extends Table {
   isNew?: boolean;
 }
 
-// Template types for inventory
+// Template types for inventory - Solo 2 tipi: modulo 2p e rotondo 4p
 const TABLE_TEMPLATES = [
-  { capacity: 2, shape: 'round' as TableShape, label: '2p Rotondo', icon: Circle },
-  { capacity: 4, shape: 'square' as TableShape, label: '4p Quadrato', icon: Square },
-  { capacity: 6, shape: 'square' as TableShape, label: '6p Quadrato', icon: Square },
-  { capacity: 2, shape: 'bistro' as TableShape, label: 'Bistrot', icon: RectangleVertical },
+  { capacity: 2, shape: 'square' as TableShape, label: 'Modulo 2p', icon: Square },
+  { capacity: 4, shape: 'round' as TableShape, label: 'Rotondo 4p', icon: Circle },
 ];
 
 // Get table dimensions based on shape
 const getTableDimensions = (shape: TableShape) => {
-  switch (shape) {
-    case 'bistro':
-      return { width: BISTRO_WIDTH, height: BISTRO_HEIGHT };
-    case 'round':
-    case 'square':
-    default:
-      return { width: TABLE_SIZE, height: TABLE_SIZE };
-  }
+  return { width: TABLE_SIZE, height: TABLE_SIZE };
 };
 
-// Get capacity color
-const getCapacityColor = (capacity: number, shape: TableShape) => {
-  if (shape === 'bistro') return 'bg-purple-500/20 border-purple-500/40 hover:bg-purple-500/30';
+// Get capacity color - include separator styling
+const getCapacityColor = (capacity: number, shape: TableShape, isSeparator: boolean = false) => {
+  if (isSeparator) return 'bg-muted/50 border-dashed border-muted-foreground/30 hover:bg-muted/70';
   if (capacity <= 2) return 'bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30';
   if (capacity <= 4) return 'bg-green-500/20 border-green-500/40 hover:bg-green-500/30';
   if (capacity <= 6) return 'bg-yellow-500/20 border-yellow-500/40 hover:bg-yellow-500/30';
@@ -140,12 +130,14 @@ function CanvasTableItem({
   });
 
   const dimensions = getTableDimensions(table.shape);
-  const capacityColor = getCapacityColor(table.capacity, table.shape);
+  const capacityColor = getCapacityColor(table.capacity, table.shape, table.is_separator);
 
-  // Display capacity range if combinable
-  const capacityLabel = table.is_combinable && table.min_capacity && table.max_capacity
-    ? `${table.min_capacity}-${table.max_capacity}p`
-    : `${table.capacity}p`;
+  // Display capacity range if combinable, hide for separators
+  const capacityLabel = table.is_separator 
+    ? '' 
+    : table.is_combinable && table.min_capacity && table.max_capacity
+      ? `${table.min_capacity}-${table.max_capacity}p`
+      : `${table.capacity}p`;
 
   return (
     <>
@@ -173,13 +165,19 @@ function CanvasTableItem({
           capacityColor,
           isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
           isDragging && "opacity-70 z-50 shadow-2xl scale-105",
-          table.is_combinable && "border-dashed"
+          table.is_combinable && !table.is_separator && "border-dashed"
         )}
       >
-        <div className="text-sm font-bold">{table.name}</div>
-        <div className="text-xs text-muted-foreground">{capacityLabel}</div>
-        {table.is_combinable && (
-          <Link2 className="w-3 h-3 text-muted-foreground mt-0.5" />
+        {table.is_separator ? (
+          <div className="text-xs text-muted-foreground/50">SEP</div>
+        ) : (
+          <>
+            <div className="text-sm font-bold">{table.name}</div>
+            <div className="text-xs text-muted-foreground">{capacityLabel}</div>
+            {table.is_combinable && (
+              <Link2 className="w-3 h-3 text-muted-foreground mt-0.5" />
+            )}
+          </>
         )}
       </div>
     </>
@@ -285,6 +283,7 @@ export default function TavoliMappa() {
           position_y: t.position_y !== null ? snapToGrid(Number(t.position_y)) : GRID_SIZE,
           shape: (t.shape || 'square') as TableShape,
           room: (t.room || 'grande') as RoomId,
+          is_separator: t.is_separator || false,
         }));
         setTables(snappedTables);
         
@@ -345,6 +344,7 @@ export default function TavoliMappa() {
         module_position: null,
         is_combinable: false,
         room: activeRoom,
+        is_separator: false,
       };
       setTables(prev => [...prev, newTable]);
       setNextTableNumber(prev => prev + 1);
@@ -402,6 +402,7 @@ export default function TavoliMappa() {
             module_position: table.module_position,
             is_combinable: table.is_combinable,
             room: table.room,
+            is_separator: table.is_separator,
           })
           .select()
           .single();
@@ -428,6 +429,7 @@ export default function TavoliMappa() {
             module_position: table.module_position,
             is_combinable: table.is_combinable,
             room: table.room,
+            is_separator: table.is_separator,
           })
           .eq('id', table.id);
 
