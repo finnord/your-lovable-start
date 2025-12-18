@@ -11,7 +11,12 @@ import {
   X, 
   UserCheck,
   ChevronRight,
-  Filter
+  Filter,
+  Cake,
+  Heart,
+  Briefcase,
+  PartyPopper,
+  Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -33,6 +38,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.
   completed: { label: 'Completata', color: 'bg-muted text-muted-foreground border-border', icon: Check },
   cancelled: { label: 'Annullata', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: X },
   no_show: { label: 'No Show', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: X },
+};
+
+const OCCASION_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
+  birthday: { label: 'Compleanno', icon: Cake, color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
+  anniversary: { label: 'Anniversario', icon: Heart, color: 'bg-amber-500/20 text-amber-400 border-amber-500/30' },
+  proposal: { label: 'Proposta', icon: Sparkles, color: 'bg-rose-500/20 text-rose-300 border-rose-500/30' },
+  business: { label: 'Business', icon: Briefcase, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
+  other: { label: 'Evento', icon: PartyPopper, color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
 };
 
 const DATE_FILTERS = [
@@ -189,7 +202,7 @@ export default function Prenotazioni() {
 
                     {/* Main info */}
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <p className="font-semibold truncate">
                           {reservation.customer_name}
                         </p>
@@ -197,6 +210,24 @@ export default function Prenotazioni() {
                           <StatusIcon className="w-3 h-3 mr-1" />
                           {statusConfig.label}
                         </Badge>
+                        {/* Occasion badge */}
+                        {reservation.occasion_type && OCCASION_CONFIG[reservation.occasion_type] && (() => {
+                          const occasionConfig = OCCASION_CONFIG[reservation.occasion_type];
+                          const OccasionIcon = occasionConfig.icon;
+                          return (
+                            <Badge className={`text-xs border ${occasionConfig.color}`}>
+                              <OccasionIcon className="w-3 h-3 mr-1" />
+                              {occasionConfig.label}
+                            </Badge>
+                          );
+                        })()}
+                        {/* Cake indicator */}
+                        {reservation.needs_cake && (
+                          <Badge className="text-xs border bg-pink-500/20 text-pink-400 border-pink-500/30">
+                            <Cake className="w-3 h-3 mr-1" />
+                            Torta
+                          </Badge>
+                        )}
                       </div>
                       
                       <div className="flex items-center gap-4 text-sm text-muted-foreground">
@@ -214,6 +245,13 @@ export default function Prenotazioni() {
                           </span>
                         )}
                       </div>
+
+                      {/* Cake message */}
+                      {reservation.cake_message && (
+                        <p className="text-sm text-pink-400 mt-1 truncate">
+                          🎂 "{reservation.cake_message}"
+                        </p>
+                      )}
 
                       {reservation.notes && (
                         <p className="text-sm text-muted-foreground mt-1 truncate">
