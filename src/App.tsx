@@ -19,6 +19,7 @@ import TavoliMappa from "./pages/TavoliMappa";
 import PublicBooking from "./pages/PublicBooking";
 import PublicOrder from "./pages/PublicOrder";
 import NotFound from "./pages/NotFound";
+import { WhatsAppCockpit } from "@/components/WhatsAppCockpit";
 
 const queryClient = new QueryClient();
 
@@ -57,6 +58,7 @@ const AppLayout = () => (
           </Routes>
         </div>
       </main>
+      <WhatsAppCockpit />
     </div>
   </SidebarProvider>
 );
