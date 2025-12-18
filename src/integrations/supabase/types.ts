@@ -317,6 +317,7 @@ export type Database = {
           id: string
           is_active: boolean
           is_combinable: boolean
+          is_separator: boolean
           location: string | null
           max_capacity: number | null
           min_capacity: number | null
@@ -335,6 +336,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_combinable?: boolean
+          is_separator?: boolean
           location?: string | null
           max_capacity?: number | null
           min_capacity?: number | null
@@ -353,6 +355,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           is_combinable?: boolean
+          is_separator?: boolean
           location?: string | null
           max_capacity?: number | null
           min_capacity?: number | null
