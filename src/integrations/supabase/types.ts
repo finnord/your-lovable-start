@@ -202,12 +202,16 @@ export type Database = {
       }
       reservations: {
         Row: {
+          cake_message: string | null
           created_at: string
           customer_email: string | null
           customer_name: string
           customer_phone: string
           id: string
+          needs_cake: boolean | null
           notes: string | null
+          occasion_notes: string | null
+          occasion_type: string | null
           party_size: number
           reservation_date: string
           reservation_number: string
@@ -217,12 +221,16 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          cake_message?: string | null
           created_at?: string
           customer_email?: string | null
           customer_name: string
           customer_phone: string
           id?: string
+          needs_cake?: boolean | null
           notes?: string | null
+          occasion_notes?: string | null
+          occasion_type?: string | null
           party_size?: number
           reservation_date: string
           reservation_number?: string
@@ -232,12 +240,16 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          cake_message?: string | null
           created_at?: string
           customer_email?: string | null
           customer_name?: string
           customer_phone?: string
           id?: string
+          needs_cake?: boolean | null
           notes?: string | null
+          occasion_notes?: string | null
+          occasion_type?: string | null
           party_size?: number
           reservation_date?: string
           reservation_number?: string

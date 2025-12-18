@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
+export type OccasionType = 'birthday' | 'anniversary' | 'proposal' | 'business' | 'other';
+
 export interface Reservation {
   id: string;
   reservation_number: string;
@@ -13,6 +15,10 @@ export interface Reservation {
   table_id: string | null;
   notes: string | null;
   status: string;
+  occasion_type: string | null;
+  occasion_notes: string | null;
+  needs_cake: boolean | null;
+  cake_message: string | null;
   created_at: string;
   updated_at: string;
 }
