@@ -22,6 +22,7 @@ import {
   useWhatsAppAI,
   WhatsAppConversation 
 } from '@/hooks/useWhatsAppMessages';
+import { useOrderDraft } from '@/hooks/useOrderDraft';
 import { cn } from '@/lib/utils';
 import { format, formatDistanceToNow } from 'date-fns';
 import { it } from 'date-fns/locale';
@@ -31,6 +32,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { CreateOrderDialog } from '@/components/order-draft';
 import { toast } from 'sonner';
 
 // Conversation list item
@@ -83,30 +85,48 @@ function ConversationItem({
   );
 }
 
-// Chat view
+// Chat view with order draft integration
 function ChatView({ 
   conversation, 
-  onBack 
+  onBack,
+  orderDraft,
 }: { 
   conversation: WhatsAppConversation;
   onBack: () => void;
+  orderDraft: ReturnType<typeof useOrderDraft>;
 }) {
   const { messages, loading: messagesLoading } = useWhatsAppMessages(conversation.id);
   const { parseOrder, summarize, suggestReply, loading: aiLoading } = useWhatsAppAI();
   const [inputValue, setInputValue] = useState('');
-  const [aiResult, setAiResult] = useState<{ type: string; content: any } | null>(null);
+  const [summaryResult, setSummaryResult] = useState<string | null>(null);
 
   const handleParseOrder = async () => {
     const result = await parseOrder(conversation.id);
-    if (result) {
-      setAiResult({ type: 'order', content: result });
+    if (result && !result.error) {
+      // Use the centralized order draft system
+      await orderDraft.importFromWhatsApp(
+        {
+          customer_name: result.customer?.name,
+          customer_phone: result.customer?.phone || conversation.phone_number,
+          items: result.items,
+          delivery_date: result.delivery_date,
+          delivery_time: result.delivery_time,
+          delivery_type: result.delivery_type,
+          notes: result.notes,
+        },
+        conversation.id,
+        conversation.phone_number
+      );
+      toast.success('Ordine estratto! Verifica e conferma i dettagli.');
+    } else if (result?.error) {
+      toast.error(result.error);
     }
   };
 
   const handleSummarize = async () => {
     const result = await summarize(conversation.id);
     if (result) {
-      setAiResult({ type: 'summary', content: result });
+      setSummaryResult(result);
     }
   };
 
@@ -238,62 +258,13 @@ function ChatView({
         </div>
       </div>
 
-      {/* AI Result Dialog */}
-      <Dialog open={!!aiResult} onOpenChange={() => setAiResult(null)}>
+      {/* Summary Dialog */}
+      <Dialog open={!!summaryResult} onOpenChange={() => setSummaryResult(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>
-              {aiResult?.type === 'order' ? '📋 Ordine Estratto' : '📝 Riassunto'}
-            </DialogTitle>
+            <DialogTitle>📝 Riassunto Conversazione</DialogTitle>
           </DialogHeader>
-          <div className="mt-2">
-            {aiResult?.type === 'order' ? (
-              <div className="space-y-3 text-sm">
-                {aiResult.content.error ? (
-                  <p className="text-destructive">{aiResult.content.error}</p>
-                ) : (
-                  <>
-                    {aiResult.content.customer && (
-                      <div>
-                        <span className="font-medium">Cliente:</span>{' '}
-                        {aiResult.content.customer.name || 'Non specificato'} ({aiResult.content.customer.phone})
-                      </div>
-                    )}
-                    {aiResult.content.items?.length > 0 && (
-                      <div>
-                        <span className="font-medium">Prodotti:</span>
-                        <ul className="list-disc list-inside mt-1">
-                          {aiResult.content.items.map((item: any, i: number) => (
-                            <li key={i}>{item.name} x{item.quantity}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {aiResult.content.delivery_date && (
-                      <div>
-                        <span className="font-medium">Data:</span> {aiResult.content.delivery_date}
-                      </div>
-                    )}
-                    {aiResult.content.delivery_type && (
-                      <div>
-                        <span className="font-medium">Tipo:</span> {aiResult.content.delivery_type}
-                      </div>
-                    )}
-                    {aiResult.content.notes && (
-                      <div>
-                        <span className="font-medium">Note:</span> {aiResult.content.notes}
-                      </div>
-                    )}
-                    <Button className="w-full mt-4" size="sm">
-                      Crea Ordine →
-                    </Button>
-                  </>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm whitespace-pre-wrap">{aiResult?.content}</p>
-            )}
-          </div>
+          <p className="text-sm whitespace-pre-wrap">{summaryResult}</p>
         </DialogContent>
       </Dialog>
     </div>
@@ -306,6 +277,9 @@ export function WhatsAppCockpit() {
   const [selectedConversation, setSelectedConversation] = useState<WhatsAppConversation | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const { conversations, loading, totalUnread, markAsRead } = useWhatsAppConversations();
+  
+  // Centralized order draft system
+  const orderDraft = useOrderDraft();
 
   const filteredConversations = conversations.filter(c => 
     c.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -373,7 +347,8 @@ export function WhatsAppCockpit() {
           {selectedConversation ? (
             <ChatView 
               conversation={selectedConversation} 
-              onBack={() => setSelectedConversation(null)} 
+              onBack={() => setSelectedConversation(null)}
+              orderDraft={orderDraft}
             />
           ) : (
             <div className="flex flex-col h-[calc(100%-72px)]">
@@ -422,6 +397,20 @@ export function WhatsAppCockpit() {
           )}
         </div>
       )}
+
+      {/* Create Order Dialog - Centralized */}
+      <CreateOrderDialog
+        open={orderDraft.isDialogOpen}
+        draft={orderDraft.draft}
+        products={orderDraft.products}
+        isCreating={orderDraft.isCreating}
+        onClose={orderDraft.clearDraft}
+        onConfirm={orderDraft.createOrder}
+        onUpdateDraft={orderDraft.updateDraft}
+        onUpdateItem={orderDraft.updateItem}
+        onToggleItemSelection={orderDraft.toggleItemSelection}
+        onRemoveItem={orderDraft.removeItem}
+      />
     </>
   );
 }
