@@ -1,6 +1,6 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { DndContext, DragOverlay, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
-import { Save, Plus, Trash2, Grid3X3 } from 'lucide-react';
+import { Save, Plus, Trash2, Grid3X3, Lock, LockOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,6 @@ import { PageWrapper } from '@/components/ui/PageWrapper';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { useEffect } from 'react';
 
 // Grid configuration
 const GRID_SIZE = 40;
@@ -48,20 +47,22 @@ const TABLE_TEMPLATES = [
 ];
 
 // Draggable inventory item
-function InventoryItem({ template }: { template: typeof TABLE_TEMPLATES[0] }) {
+function InventoryItem({ template, disabled }: { template: typeof TABLE_TEMPLATES[0]; disabled?: boolean }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `template-${template.capacity}`,
     data: { type: 'template', capacity: template.capacity },
+    disabled,
   });
 
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      {...(disabled ? {} : { ...listeners, ...attributes })}
       className={cn(
-        "p-4 border rounded-lg cursor-grab active:cursor-grabbing transition-all duration-200",
-        "hover:scale-105 hover:shadow-lg",
+        "p-4 border rounded-lg transition-all duration-200",
+        disabled 
+          ? "opacity-50 cursor-not-allowed" 
+          : "cursor-grab active:cursor-grabbing hover:scale-105 hover:shadow-lg",
         template.color,
         isDragging && "opacity-50 scale-95"
       )}
@@ -80,20 +81,19 @@ function InventoryItem({ template }: { template: typeof TABLE_TEMPLATES[0] }) {
 function CanvasTableItem({ 
   table, 
   isSelected, 
-  onClick 
+  onClick,
+  disabled
 }: { 
   table: CanvasTable; 
   isSelected: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging, transform } = useDraggable({
     id: table.id,
     data: { type: 'table', table },
+    disabled,
   });
-
-  const style = transform ? {
-    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
-  } : undefined;
 
   const capacityColor = 
     table.capacity <= 2 ? 'bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30' :
@@ -113,14 +113,14 @@ function CanvasTableItem({
         transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
         willChange: isDragging ? 'transform' : undefined,
       }}
-      {...listeners}
-      {...attributes}
+      {...(disabled ? {} : { ...listeners, ...attributes })}
       onClick={(e) => {
         e.stopPropagation();
         onClick();
       }}
       className={cn(
-        "rounded-lg border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center",
+        "rounded-lg border-2 flex flex-col items-center justify-center",
+        disabled ? "cursor-default" : "cursor-grab active:cursor-grabbing",
         !isDragging && "transition-colors transition-shadow duration-200",
         capacityColor,
         isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
@@ -201,6 +201,7 @@ export default function TavoliMappa() {
   const [saving, setSaving] = useState(false);
   const [nextTableNumber, setNextTableNumber] = useState(1);
   const [showGrid, setShowGrid] = useState(true);
+  const [isLocked, setIsLocked] = useState(true); // Default: locked for safety
   const canvasRef = useRef<HTMLDivElement>(null);
 
   // Configure sensors with activation constraint to prevent accidental drags
@@ -410,6 +411,17 @@ export default function TavoliMappa() {
     );
   }
 
+  const toggleLock = () => {
+    setIsLocked(prev => !prev);
+    if (!isLocked) {
+      // When locking, deselect any selected table
+      setSelectedTable(null);
+    }
+    toast(isLocked ? 'Modifica abilitata' : 'Mappa bloccata', {
+      icon: isLocked ? <LockOpen className="w-4 h-4" /> : <Lock className="w-4 h-4" />,
+    });
+  };
+
   return (
     <PageWrapper>
       {/* Header */}
@@ -417,7 +429,10 @@ export default function TavoliMappa() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Mappa Tavoli</h1>
           <p className="text-muted-foreground mt-1">
-            Trascina i tavoli per posizionarli • Griglia {GRID_SIZE}px
+            {isLocked 
+              ? 'Mappa bloccata • Sblocca per modificare'
+              : `Trascina i tavoli per posizionarli • Griglia ${GRID_SIZE}px`
+            }
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -430,7 +445,7 @@ export default function TavoliMappa() {
             <Grid3X3 className="w-4 h-4 mr-2" />
             Griglia
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || isLocked}>
             <Save className="w-4 h-4 mr-2" />
             {saving ? 'Salvataggio...' : 'Salva'}
           </Button>
@@ -444,17 +459,20 @@ export default function TavoliMappa() {
       >
         <div className="grid grid-cols-[240px_1fr_240px] gap-6">
           {/* Inventory Panel */}
-          <Card className="p-4 h-fit animate-fade-in" style={{ animationDelay: '0.1s' }}>
+          <Card className={cn(
+            "p-4 h-fit animate-fade-in transition-opacity duration-300",
+            isLocked && "opacity-50"
+          )} style={{ animationDelay: '0.1s' }}>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
               Inventario
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {TABLE_TEMPLATES.map(template => (
-                <InventoryItem key={template.capacity} template={template} />
+                <InventoryItem key={template.capacity} template={template} disabled={isLocked} />
               ))}
             </div>
             <p className="text-xs text-muted-foreground mt-4 text-center">
-              Trascina nel canvas
+              {isLocked ? 'Sblocca per aggiungere' : 'Trascina nel canvas'}
             </p>
           </Card>
 
@@ -470,19 +488,23 @@ export default function TavoliMappa() {
                   key={table.id}
                   table={table}
                   isSelected={selectedTable === table.id}
-                  onClick={() => setSelectedTable(table.id)}
+                  onClick={() => !isLocked && setSelectedTable(table.id)}
+                  disabled={isLocked}
                 />
               ))}
             </Canvas>
           </div>
 
           {/* Properties Panel */}
-          <Card className="p-4 h-fit animate-fade-in" style={{ animationDelay: '0.3s' }}>
+          <Card className={cn(
+            "p-4 h-fit animate-fade-in transition-opacity duration-300",
+            isLocked && "opacity-50"
+          )} style={{ animationDelay: '0.3s' }}>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
               Proprietà
             </h3>
             
-            {selectedTableData ? (
+            {selectedTableData && !isLocked ? (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label className="text-xs uppercase tracking-widest text-muted-foreground">
@@ -544,7 +566,10 @@ export default function TavoliMappa() {
               </div>
             ) : (
               <p className="text-sm text-muted-foreground text-center py-8">
-                Seleziona un tavolo per modificarlo
+                {isLocked 
+                  ? 'Sblocca per modificare i tavoli' 
+                  : 'Seleziona un tavolo per modificarlo'
+                }
               </p>
             )}
           </Card>
@@ -562,6 +587,33 @@ export default function TavoliMappa() {
           )}
         </DragOverlay>
       </DndContext>
+
+      {/* Lock/Unlock FAB - Max MSP style */}
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <Button
+          variant={isLocked ? "default" : "outline"}
+          size="lg"
+          onClick={toggleLock}
+          className={cn(
+            "rounded-full shadow-lg transition-all duration-300 gap-2 px-6",
+            isLocked 
+              ? "bg-destructive hover:bg-destructive/90" 
+              : "bg-background hover:bg-muted border-2 border-primary"
+          )}
+        >
+          {isLocked ? (
+            <>
+              <Lock className="w-5 h-5" />
+              <span className="font-medium">Bloccato</span>
+            </>
+          ) : (
+            <>
+              <LockOpen className="w-5 h-5" />
+              <span className="font-medium">Sbloccato</span>
+            </>
+          )}
+        </Button>
+      </div>
     </PageWrapper>
   );
 }
