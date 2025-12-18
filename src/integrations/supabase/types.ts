@@ -316,10 +316,17 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
+          is_combinable: boolean
           location: string | null
+          max_capacity: number | null
+          min_capacity: number | null
+          module_group: string | null
+          module_position: number | null
           name: string
           position_x: number | null
           position_y: number | null
+          room: string
+          shape: string
           sort_order: number | null
         }
         Insert: {
@@ -327,10 +334,17 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_combinable?: boolean
           location?: string | null
+          max_capacity?: number | null
+          min_capacity?: number | null
+          module_group?: string | null
+          module_position?: number | null
           name: string
           position_x?: number | null
           position_y?: number | null
+          room?: string
+          shape?: string
           sort_order?: number | null
         }
         Update: {
@@ -338,10 +352,17 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
+          is_combinable?: boolean
           location?: string | null
+          max_capacity?: number | null
+          min_capacity?: number | null
+          module_group?: string | null
+          module_position?: number | null
           name?: string
           position_x?: number | null
           position_y?: number | null
+          room?: string
+          shape?: string
           sort_order?: number | null
         }
         Relationships: []
