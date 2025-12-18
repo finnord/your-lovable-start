@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
-import { DndContext, DragOverlay, useDraggable, useDroppable, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
-import { Save, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { DndContext, DragOverlay, useDraggable, useDroppable, DragEndEvent, DragStartEvent, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { Save, Plus, Trash2, Grid3X3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,6 +10,20 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { useEffect } from 'react';
+
+// Grid configuration
+const GRID_SIZE = 40;
+const TABLE_SIZE = 80;
+
+// Snap to grid function
+const snapToGrid = (value: number): number => {
+  return Math.round(value / GRID_SIZE) * GRID_SIZE;
+};
+
+// Clamp value within bounds
+const clamp = (value: number, min: number, max: number): number => {
+  return Math.max(min, Math.min(max, value));
+};
 
 interface Table {
   id: string;
@@ -46,9 +60,10 @@ function InventoryItem({ template }: { template: typeof TABLE_TEMPLATES[0] }) {
       {...listeners}
       {...attributes}
       className={cn(
-        "p-4 border rounded-lg cursor-grab active:cursor-grabbing transition-all",
+        "p-4 border rounded-lg cursor-grab active:cursor-grabbing transition-all duration-200",
+        "hover:scale-105 hover:shadow-lg",
         template.color,
-        isDragging && "opacity-50"
+        isDragging && "opacity-50 scale-95"
       )}
     >
       <div className="text-center">
@@ -81,10 +96,10 @@ function CanvasTableItem({
   } : undefined;
 
   const capacityColor = 
-    table.capacity <= 2 ? 'bg-blue-500/20 border-blue-500/40' :
-    table.capacity <= 4 ? 'bg-green-500/20 border-green-500/40' :
-    table.capacity <= 6 ? 'bg-yellow-500/20 border-yellow-500/40' :
-    'bg-orange-500/20 border-orange-500/40';
+    table.capacity <= 2 ? 'bg-blue-500/20 border-blue-500/40 hover:bg-blue-500/30' :
+    table.capacity <= 4 ? 'bg-green-500/20 border-green-500/40 hover:bg-green-500/30' :
+    table.capacity <= 6 ? 'bg-yellow-500/20 border-yellow-500/40 hover:bg-yellow-500/30' :
+    'bg-orange-500/20 border-orange-500/40 hover:bg-orange-500/30';
 
   return (
     <div
@@ -94,6 +109,8 @@ function CanvasTableItem({
         position: 'absolute',
         left: table.position_x || 0,
         top: table.position_y || 0,
+        width: TABLE_SIZE,
+        height: TABLE_SIZE,
       }}
       {...listeners}
       {...attributes}
@@ -102,10 +119,10 @@ function CanvasTableItem({
         onClick();
       }}
       className={cn(
-        "w-20 h-20 rounded-lg border-2 cursor-grab active:cursor-grabbing transition-all flex flex-col items-center justify-center",
+        "rounded-lg border-2 cursor-grab active:cursor-grabbing transition-all duration-200 flex flex-col items-center justify-center",
         capacityColor,
-        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background",
-        isDragging && "opacity-50 z-50"
+        isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
+        isDragging && "opacity-70 z-50 shadow-2xl scale-105"
       )}
     >
       <div className="text-sm font-bold">{table.name}</div>
@@ -114,33 +131,59 @@ function CanvasTableItem({
   );
 }
 
-// Canvas drop area
+// Canvas drop area with ref for position calculations
 function Canvas({ 
   children, 
-  onClick 
+  onClick,
+  canvasRef,
+  showGrid
 }: { 
   children: React.ReactNode;
   onClick: () => void;
+  canvasRef: React.RefObject<HTMLDivElement>;
+  showGrid: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({
     id: 'canvas',
   });
 
+  // Combine refs
+  const combinedRef = useCallback((node: HTMLDivElement | null) => {
+    setNodeRef(node);
+    if (canvasRef && 'current' in canvasRef) {
+      (canvasRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+    }
+  }, [setNodeRef, canvasRef]);
+
   return (
     <div
-      ref={setNodeRef}
+      ref={combinedRef}
       onClick={onClick}
       className={cn(
-        "relative w-full h-[600px] border border-dashed rounded-lg transition-colors overflow-hidden",
-        isOver ? "border-primary bg-primary/5" : "border-border/50 bg-muted/20"
+        "relative w-full h-[600px] border border-dashed rounded-lg transition-all duration-300 overflow-hidden",
+        isOver ? "border-primary bg-primary/5 shadow-inner" : "border-border/50 bg-muted/20"
       )}
     >
       {/* Grid pattern */}
       <div 
+        className={cn(
+          "absolute inset-0 transition-opacity duration-300",
+          showGrid ? "opacity-40" : "opacity-20"
+        )}
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, hsl(var(--border)) 1px, transparent 1px),
+            linear-gradient(to bottom, hsl(var(--border)) 1px, transparent 1px)
+          `,
+          backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
+        }}
+      />
+      {/* Dots at intersections */}
+      <div 
         className="absolute inset-0 opacity-30"
         style={{
-          backgroundImage: 'radial-gradient(circle, hsl(var(--muted-foreground)) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
+          backgroundImage: 'radial-gradient(circle, hsl(var(--muted-foreground)) 1.5px, transparent 1.5px)',
+          backgroundSize: `${GRID_SIZE}px ${GRID_SIZE}px`,
         }}
       />
       {children}
@@ -155,6 +198,17 @@ export default function TavoliMappa() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [nextTableNumber, setNextTableNumber] = useState(1);
+  const [showGrid, setShowGrid] = useState(true);
+  const canvasRef = useRef<HTMLDivElement>(null);
+
+  // Configure sensors with activation constraint to prevent accidental drags
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // Minimum drag distance before activation
+      },
+    })
+  );
 
   // Fetch existing tables
   useEffect(() => {
@@ -168,7 +222,14 @@ export default function TavoliMappa() {
         console.error('[TavoliMappa] Error fetching tables:', error);
         toast.error('Errore nel caricamento dei tavoli');
       } else if (data) {
-        setTables(data);
+        // Snap existing tables to grid
+        const snappedTables = data.map(t => ({
+          ...t,
+          position_x: t.position_x !== null ? snapToGrid(t.position_x) : GRID_SIZE,
+          position_y: t.position_y !== null ? snapToGrid(t.position_y) : GRID_SIZE,
+        }));
+        setTables(snappedTables);
+        
         // Calculate next table number
         const maxNum = data.reduce((max, t) => {
           const num = parseInt(t.name.replace(/\D/g, '')) || 0;
@@ -189,20 +250,33 @@ export default function TavoliMappa() {
     const { active, over, delta } = event;
     setActiveId(null);
 
-    if (!over) return;
+    if (!over || !canvasRef.current) return;
 
     const activeData = active.data.current;
+    const canvasRect = canvasRef.current.getBoundingClientRect();
+    const maxX = canvasRect.width - TABLE_SIZE;
+    const maxY = canvasRect.height - TABLE_SIZE;
 
     // If dragging a template onto canvas, create new table
     if (activeData?.type === 'template' && over.id === 'canvas') {
       const capacity = activeData.capacity;
+      
+      // Get the pointer position from the event
+      const pointerEvent = event.activatorEvent as PointerEvent;
+      const dropX = pointerEvent.clientX - canvasRect.left - TABLE_SIZE / 2;
+      const dropY = pointerEvent.clientY - canvasRect.top - TABLE_SIZE / 2;
+      
+      // Snap to grid and clamp within bounds
+      const snappedX = clamp(snapToGrid(dropX), 0, maxX);
+      const snappedY = clamp(snapToGrid(dropY), 0, maxY);
+      
       const newTable: CanvasTable = {
         id: `new-${Date.now()}`,
         name: `T${nextTableNumber}`,
         capacity,
         location: null,
-        position_x: Math.max(0, (event.activatorEvent as MouseEvent).offsetX - 40),
-        position_y: Math.max(0, (event.activatorEvent as MouseEvent).offsetY - 40),
+        position_x: snappedX,
+        position_y: snappedY,
         is_active: true,
         isNew: true,
       };
@@ -212,15 +286,22 @@ export default function TavoliMappa() {
       toast.success(`Tavolo ${newTable.name} aggiunto`);
     }
 
-    // If dragging existing table on canvas, update position
+    // If dragging existing table on canvas, update position with snap
     if (activeData?.type === 'table') {
       const tableId = active.id as string;
       setTables(prev => prev.map(t => {
         if (t.id === tableId) {
+          const newX = (t.position_x || 0) + delta.x;
+          const newY = (t.position_y || 0) + delta.y;
+          
+          // Snap to grid and clamp within bounds
+          const snappedX = clamp(snapToGrid(newX), 0, maxX);
+          const snappedY = clamp(snapToGrid(newY), 0, maxY);
+          
           return {
             ...t,
-            position_x: Math.max(0, (t.position_x || 0) + delta.x),
-            position_y: Math.max(0, (t.position_y || 0) + delta.y),
+            position_x: snappedX,
+            position_y: snappedY,
           };
         }
         return t;
@@ -330,23 +411,38 @@ export default function TavoliMappa() {
   return (
     <PageWrapper>
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-8 animate-fade-in">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Mappa Tavoli</h1>
           <p className="text-muted-foreground mt-1">
-            Trascina i tavoli per posizionarli
+            Trascina i tavoli per posizionarli • Griglia {GRID_SIZE}px
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          <Save className="w-4 h-4 mr-2" />
-          {saving ? 'Salvataggio...' : 'Salva'}
-        </Button>
+        <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setShowGrid(!showGrid)}
+            className={cn(showGrid && "bg-muted")}
+          >
+            <Grid3X3 className="w-4 h-4 mr-2" />
+            Griglia
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            <Save className="w-4 h-4 mr-2" />
+            {saving ? 'Salvataggio...' : 'Salva'}
+          </Button>
+        </div>
       </div>
 
-      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+      <DndContext 
+        sensors={sensors}
+        onDragStart={handleDragStart} 
+        onDragEnd={handleDragEnd}
+      >
         <div className="grid grid-cols-[240px_1fr_240px] gap-6">
           {/* Inventory Panel */}
-          <Card className="p-4 h-fit">
+          <Card className="p-4 h-fit animate-fade-in" style={{ animationDelay: '0.1s' }}>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
               Inventario
             </h3>
@@ -361,19 +457,25 @@ export default function TavoliMappa() {
           </Card>
 
           {/* Canvas */}
-          <Canvas onClick={() => setSelectedTable(null)}>
-            {tables.map(table => (
-              <CanvasTableItem
-                key={table.id}
-                table={table}
-                isSelected={selectedTable === table.id}
-                onClick={() => setSelectedTable(table.id)}
-              />
-            ))}
-          </Canvas>
+          <div className="animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <Canvas 
+              onClick={() => setSelectedTable(null)}
+              canvasRef={canvasRef}
+              showGrid={showGrid}
+            >
+              {tables.map(table => (
+                <CanvasTableItem
+                  key={table.id}
+                  table={table}
+                  isSelected={selectedTable === table.id}
+                  onClick={() => setSelectedTable(table.id)}
+                />
+              ))}
+            </Canvas>
+          </div>
 
           {/* Properties Panel */}
-          <Card className="p-4 h-fit">
+          <Card className="p-4 h-fit animate-fade-in" style={{ animationDelay: '0.3s' }}>
             <h3 className="text-xs uppercase tracking-widest text-muted-foreground mb-4">
               Proprietà
             </h3>
@@ -417,6 +519,15 @@ export default function TavoliMappa() {
                   />
                 </div>
 
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                    Posizione
+                  </Label>
+                  <div className="text-sm text-muted-foreground">
+                    X: {selectedTableData.position_x}px, Y: {selectedTableData.position_y}px
+                  </div>
+                </div>
+
                 <div className="pt-4 border-t border-border/50">
                   <Button
                     variant="destructive"
@@ -440,7 +551,10 @@ export default function TavoliMappa() {
         {/* Drag overlay */}
         <DragOverlay>
           {activeId?.startsWith('template-') && (
-            <div className="w-20 h-20 rounded-lg border-2 bg-primary/20 border-primary/40 flex items-center justify-center opacity-80">
+            <div 
+              className="rounded-lg border-2 bg-primary/20 border-primary/40 flex items-center justify-center opacity-90 shadow-2xl"
+              style={{ width: TABLE_SIZE, height: TABLE_SIZE }}
+            >
               <Plus className="w-6 h-6 text-primary" />
             </div>
           )}
