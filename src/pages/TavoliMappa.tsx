@@ -105,12 +105,13 @@ function CanvasTableItem({
     <div
       ref={setNodeRef}
       style={{
-        ...style,
         position: 'absolute',
         left: table.position_x || 0,
         top: table.position_y || 0,
         width: TABLE_SIZE,
         height: TABLE_SIZE,
+        transform: transform ? `translate3d(${transform.x}px, ${transform.y}px, 0)` : undefined,
+        willChange: isDragging ? 'transform' : undefined,
       }}
       {...listeners}
       {...attributes}
@@ -119,7 +120,8 @@ function CanvasTableItem({
         onClick();
       }}
       className={cn(
-        "rounded-lg border-2 cursor-grab active:cursor-grabbing transition-all duration-200 flex flex-col items-center justify-center",
+        "rounded-lg border-2 cursor-grab active:cursor-grabbing flex flex-col items-center justify-center",
+        !isDragging && "transition-colors transition-shadow duration-200",
         capacityColor,
         isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background shadow-lg",
         isDragging && "opacity-70 z-50 shadow-2xl scale-105"
